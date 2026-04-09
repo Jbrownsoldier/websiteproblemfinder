@@ -28,55 +28,57 @@ def _pick(website: str, phrases: list) -> str:
 
 
 # Phrase pools keyed by problem type — all fit "I noticed your website is [X]"
+# Phrases are location-specific so a non-technical reader can open the site,
+# find the problem in 10 seconds, and confirm it's real.
 _PHRASES = {
     "no_contact_path": [
-        "missing any way for visitors to contact or reach out",
-        "not giving visitors a clear next step to get in touch",
-        "lacking any contact option for visitors who are ready to connect",
-        "missing a direct way for interested visitors to take action",
-        "not showing visitors how to reach out or get started",
+        "showing no phone number, form, or contact button anywhere on the homepage",
+        "giving visitors on the homepage no way to call, book, or send a message",
+        "showing no contact option anywhere — visitors who want to reach out hit a dead end on the homepage",
+        "missing any phone number, form, or button on the homepage that lets visitors take the next step",
+        "leaving visitors with nothing to click or fill out when they land on the homepage and want to connect",
     ],
     "no_phone_no_form_no_booking": [
-        "missing a phone number, contact form, or any way for visitors to reach out",
-        "giving visitors no clear path to call, book, or get in touch",
-        "not providing a phone number or any form for visitors to reach out",
-        "leaving visitors with no way to call, contact, or request anything",
-        "missing any phone number or contact form for ready-to-act visitors",
+        "showing no phone number, contact form, or booking option anywhere on the homepage",
+        "giving visitors landing on the homepage no way to call, submit, or book",
+        "missing a phone number and contact form on the homepage — visitors have no clear way to reach out",
+        "leaving the homepage with no form, no phone number, and no way for visitors to take action",
+        "showing visitors nothing to click or submit on the homepage when they are ready to get in touch",
     ],
     "phone_buried_no_other": [
-        "hiding the phone number below the fold with no form or booking option",
-        "burying the only contact option — the phone number — below the fold",
-        "pushing the phone number out of sight with no form or booking alternative",
-        "hiding the phone number where visitors are unlikely to find it",
-        "keeping the phone number buried with no other way to reach out",
+        "showing the phone number only at the very bottom of the homepage, where most visitors never scroll",
+        "burying the phone number in the footer of the homepage with no form or booking option above it",
+        "hiding the only contact option — the phone number — at the bottom of the homepage where it gets missed",
+        "placing the phone number in the footer instead of the top of the homepage, with no other way to reach out",
+        "keeping the phone number out of sight at the bottom of the homepage and offering no form as a backup",
     ],
     "no_form_no_booking": [
-        "missing a contact form or online booking option",
-        "not offering a form or booking option for visitors ready to take action",
-        "giving visitors only a phone number with no form or booking path",
-        "lacking a contact form or any way for visitors to self-serve a next step",
-        "missing a quote form or booking option alongside the phone number",
+        "showing only a phone number on the homepage with no contact form or booking option for visitors who prefer not to call",
+        "giving visitors only a phone number — there is no form or booking option on the homepage for those ready to act",
+        "missing a contact form or booking button on the homepage alongside the phone number",
+        "leaving the homepage without a form or booking option, so visitors who want to self-serve have nowhere to go",
+        "showing a phone number but no form on the homepage — visitors who don't want to call have no way to reach out",
     ],
     "form_buried_no_cta": [
-        "burying the contact form with no clear call to action directing visitors to it",
-        "hiding the contact form without a clear button or CTA pointing visitors to it",
-        "having a contact form but no strong call to action to guide visitors there",
-        "making the contact form hard to find with no visible CTA above the fold",
-        "burying the lead capture form without directing visitors to take action",
+        "hiding the contact form on the homepage with no button or banner pointing visitors to it",
+        "burying the contact form on the page without a visible call to action directing visitors to fill it out",
+        "having a contact form on the homepage but no clear button or headline guiding visitors to it",
+        "placing a contact form low on the homepage without any prompt above the fold pointing visitors to use it",
+        "tucking the contact form away on the page with nothing at the top of the homepage telling visitors it is there",
     ],
     "phone_buried_no_cta": [
-        "hiding the phone number below the fold and missing a clear call to action",
-        "burying the phone number with no call to action to guide visitors",
-        "keeping the phone number out of sight and offering no clear next step",
-        "hiding contact info below the fold with nothing guiding visitors to act",
-        "burying the phone number and leaving visitors without a clear path forward",
+        "placing the phone number at the bottom of the homepage with no button or headline above the fold to guide visitors",
+        "burying the phone number in the footer and offering no call to action at the top of the homepage",
+        "hiding the phone number at the bottom of the page with no visible prompt above to guide visitors to contact",
+        "keeping contact info out of sight at the bottom of the homepage with no call to action button above the fold",
+        "showing the phone number only in the footer of the homepage with no clear next step for visitors who are ready to act",
     ],
     "no_cta": [
-        "lacking any clear call to action for ready-to-buy visitors",
-        "not guiding visitors toward any next step once they land on the site",
-        "missing a strong call to action that moves visitors toward conversion",
-        "leaving visitors with no clear direction on what to do next",
-        "offering no call to action for visitors who are ready to take the next step",
+        "showing no button or call to action on the homepage that tells visitors what to do next",
+        "leaving the homepage without a single button that moves visitors toward booking, calling, or getting a quote",
+        "missing a clear call to action button on the homepage — visitors who are ready to act have nowhere obvious to click",
+        "displaying no call to action on the homepage, so visitors have to figure out on their own how to get in touch",
+        "giving visitors landing on the homepage no button or prompt that guides them toward contacting or booking",
     ],
 }
 
@@ -377,15 +379,20 @@ Output format rules (strictly enforced):
 - Be concise, specific, and natural — as if spoken in a cold outreach message
 - Do NOT mention page speed, technical SEO, branding, colors, or design unless directly tied to conversion loss
 
+Output requirements:
+- Mention the specific page (homepage, contact page, services page, etc.)
+- Mention where on the page (top, above the fold, bottom, footer, buried in a section)
+- Describe what a non-technical visitor would experience — plain English, no jargon
+- Must be specific enough that someone can open the site and find the problem in 10 seconds
+- Must sound like a real problem tied to friction where money could be made
+
 Good output examples:
-  missing a way to book appointments online
-  hiding the phone number below the fold
-  missing a contact form on the contact page
-  using a vague "Submit" button instead of a clear call to action
-  missing any way to request a quote
-  making visitors scroll past three sections of content before seeing any contact option
-  lacking a dedicated booking or scheduling page
-  not showing a phone number anywhere on the site"""
+  showing the phone number only in the footer of the homepage, where most visitors never scroll
+  showing no call to action button above the fold on the homepage — visitors have to scroll down to find anything to click
+  hiding the contact form at the bottom of the services page with no button at the top pointing visitors to it
+  showing a "Submit" button on the contact page instead of something clear like "Get My Free Quote"
+  missing a phone number or contact form on the contact page — just a map and an address
+  making visitors scroll through four sections of the homepage before seeing any way to get in touch"""
 
 USER_PROMPT_TEMPLATE = """WEBSITE: {website}
 COMPANY: {company_name}
