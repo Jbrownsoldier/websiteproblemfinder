@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Website Problem Finder</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f4f6f9;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      width: 100%;
+      max-width: 620px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      padding: 28px 32px 22px;
+    }
+    .card-header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+    .card-header p  { font-size: 13px; color: #a0aec0; margin-top: 4px; }
+
+    .card-body { padding: 28px 32px; }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #cbd5e0;
+      border-radius: 10px;
+      padding: 36px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #f8fafc;
+      position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: #4f46e5;
+      background: #eef2ff;
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 36px; margin-bottom: 10px; }
+    .upload-zone .label { font-size: 15px; font-weight: 600; color: #374151; }
+    .upload-zone .sublabel { font-size: 13px; color: #9ca3af; margin-top: 4px; }
+    .upload-zone .file-selected {
+      font-size: 14px; color: #4f46e5; font-weight: 600; margin-top: 8px;
+    }
+
+    /* Settings box */
+    .settings-box {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-top: 20px;
+      background: #fafafa;
+    }
+    .settings-box .section-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: #6b7280; margin-bottom: 14px;
+    }
+
+    /* API key field */
+    .api-key-row { }
+    .api-key-row label {
+      font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;
+    }
+    .api-key-row input[type="text"],
+    .api-key-row input[type="password"] {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: 13px; font-family: monospace;
+      outline: none; transition: border-color 0.2s;
+      background: #fff;
+    }
+    .api-key-row input:focus { border-color: #4f46e5; }
+    .api-key-hint {
+      font-size: 11px; color: #9ca3af; margin-top: 5px; line-height: 1.5;
+    }
+
+    /* Run button */
+    .btn-run {
+      margin-top: 22px;
+      width: 100%;
+      padding: 13px;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      letter-spacing: 0.2px;
+    }
+    .btn-run:hover:not(:disabled) { background: #4338ca; }
+    .btn-run:active:not(:disabled) { transform: scale(0.98); }
+    .btn-run:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+    /* Progress section */
+    .progress-section {
+      margin-top: 24px;
+      display: none;
+    }
+    .progress-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .progress-header .label { font-size: 13px; font-weight: 600; color: #374151; }
+    .progress-header .count { font-size: 13px; color: #6b7280; }
+
+    .progress-bar-track {
+      background: #e5e7eb; border-radius: 8px; height: 10px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      background: linear-gradient(90deg, #4f46e5, #818cf8);
+      height: 100%; border-radius: 8px;
+      width: 0%; transition: width 0.4s ease;
+    }
+
+    .progress-company {
+      font-size: 12px; color: #6b7280; margin-top: 6px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .stats-row {
+      display: flex; gap: 16px; margin-top: 12px;
+    }
+    .stat-pill {
+      flex: 1; border-radius: 8px; padding: 10px 14px;
+      text-align: center;
+    }
+    .stat-pill.analyzed { background: #d1fae5; }
+    .stat-pill.failed   { background: #fee2e2; }
+    .stat-pill .stat-number { font-size: 22px; font-weight: 800; }
+    .stat-pill.analyzed .stat-number { color: #065f46; }
+    .stat-pill.failed   .stat-number { color: #991b1b; }
+    .stat-pill .stat-label { font-size: 11px; font-weight: 600; color: #6b7280; margin-top: 2px; }
+
+    /* Error banner */
+    .error-banner {
+      display: none;
+      margin-top: 16px;
+      background: #fee2e2; border: 1px solid #fca5a5;
+      border-radius: 8px; padding: 12px 14px;
+      font-size: 13px; color: #7f1d1d;
+    }
+
+    /* Download button */
+    .btn-download {
+      display: none;
+      margin-top: 18px;
+      width: 100%;
+      padding: 13px;
+      background: #10b981;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      transition: background 0.2s;
+    }
+    .btn-download:hover { background: #059669; }
+
+    .divider { height: 1px; background: #f0f0f0; margin: 20px 0; }
+
+    .info-box {
+      background: #eff6ff; border: 1px solid #bfdbfe;
+      border-radius: 8px; padding: 12px 14px; margin-top: 16px;
+      font-size: 12px; color: #1e40af; line-height: 1.6;
+    }
+    .info-box strong { font-weight: 700; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <h1>Website Problem Finder</h1>
+    <p>Upload a CSV of companies &rarr; find the #1 conversion issue on each website</p>
+  </div>
+
+  <div class="card-body">
+
+    <!-- Upload zone -->
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="csvFile" accept=".csv" />
+      <div class="upload-icon">📂</div>
+      <div class="label">Drop your CSV here or click to browse</div>
+      <div class="sublabel">Requires: <strong>company_name</strong> + <strong>website</strong> (or domain) columns</div>
+      <div class="file-selected" id="fileLabel" style="display:none"></div>
+    </div>
+
+    <!-- Info box -->
+    <div class="info-box">
+      <strong>What this does:</strong> Analyzes each website for the single most important
+      conversion problem — the issue closest to lost revenue. Output is a
+      <code>websiteproblem</code> column ready to paste into outreach copy.
+    </div>
+
+    <!-- Settings -->
+    <div class="settings-box" style="margin-top: 20px;">
+      <div class="section-title">Settings</div>
+
+      <!-- API key -->
+      <div class="api-key-row">
+        <label for="apiKey">Anthropic API Key <span style="color:#9ca3af; font-weight:400">(optional)</span></label>
+        <input
+          type="password"
+          id="apiKey"
+          placeholder="sk-ant-..."
+          value="{{ default_api_key }}"
+          autocomplete="off"
+        />
+        <div class="api-key-hint">
+          Optional. Without a key, a rule-based engine handles obvious problems for free.
+          With a key, Claude analyzes subtle cases the rules can't catch — like buried CTAs
+          or weak button copy. Your key is never stored.
+        </div>
+      </div>
+    </div>
+
+    <!-- Run button -->
+    <button class="btn-run" id="runBtn" onclick="startJob()">
+      Analyze Websites
+    </button>
+
+    <!-- Error banner -->
+    <div class="error-banner" id="errorBanner"></div>
+
+    <!-- Progress section -->
+    <div class="progress-section" id="progressSection">
+      <div class="divider"></div>
+      <div class="progress-header">
+        <span class="label">Progress</span>
+        <span class="count" id="progressCount">0 / 0</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressBar"></div>
+      </div>
+      <div class="progress-company" id="progressCompany"></div>
+
+      <div class="stats-row">
+        <div class="stat-pill analyzed">
+          <div class="stat-number" id="statAnalyzed">0</div>
+          <div class="stat-label">Analyzed</div>
+        </div>
+        <div class="stat-pill failed">
+          <div class="stat-number" id="statFailed">0</div>
+          <div class="stat-label">Failed / Unreachable</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Download button -->
+    <button class="btn-download" id="downloadBtn" onclick="downloadResults()">
+      Download Results CSV
+    </button>
+
+  </div>
+</div>
+
+<script>
+  let currentJobId = null;
+  let pollInterval = null;
+
+  // ---------------------------------------------------------------------------
+  // File drag-and-drop UX
+  // ---------------------------------------------------------------------------
+  const uploadZone = document.getElementById("uploadZone");
+  const csvFile    = document.getElementById("csvFile");
+  const fileLabel  = document.getElementById("fileLabel");
+
+  csvFile.addEventListener("change", () => {
+    if (csvFile.files.length) {
+      fileLabel.textContent = csvFile.files[0].name;
+      fileLabel.style.display = "block";
+    }
+  });
+
+  uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("drag-over"); });
+  uploadZone.addEventListener("dragleave", ()  => uploadZone.classList.remove("drag-over"));
+  uploadZone.addEventListener("drop", e => {
+    e.preventDefault();
+    uploadZone.classList.remove("drag-over");
+    if (e.dataTransfer.files.length) {
+      csvFile.files = e.dataTransfer.files;
+      fileLabel.textContent = e.dataTransfer.files[0].name;
+      fileLabel.style.display = "block";
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Start job
+  // ---------------------------------------------------------------------------
+  function startJob() {
+    const file   = csvFile.files[0];
+    const apiKey = document.getElementById("apiKey").value.trim();
+
+    // Validate
+    if (!file) {
+      showError("Please select a CSV file.");
+      return;
+    }
+    if (!apiKey) {
+      showError("Please enter your Anthropic API key.");
+      return;
+    }
+
+    hideError();
+
+    const formData = new FormData();
+    formData.append("csv_file", file);
+    formData.append("api_key",  apiKey);
+
+    document.getElementById("runBtn").disabled = true;
+    document.getElementById("runBtn").textContent = "Starting...";
+
+    fetch("/run", { method: "POST", body: formData })
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) {
+          showError(data.error);
+          document.getElementById("runBtn").disabled = false;
+          document.getElementById("runBtn").textContent = "Analyze Websites";
+          return;
+        }
+
+        currentJobId = data.job_id;
+
+        // Show progress UI
+        document.getElementById("progressSection").style.display = "block";
+        document.getElementById("progressCount").textContent = `0 / ${data.total}`;
+        document.getElementById("downloadBtn").style.display = "none";
+        document.getElementById("runBtn").textContent = "Analyzing...";
+
+        // Start polling
+        pollInterval = setInterval(pollProgress, 1500);
+      })
+      .catch(err => {
+        showError("Network error: " + err);
+        document.getElementById("runBtn").disabled = false;
+        document.getElementById("runBtn").textContent = "Analyze Websites";
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Poll progress
+  // ---------------------------------------------------------------------------
+  function pollProgress() {
+    if (!currentJobId) return;
+
+    fetch(`/progress/${currentJobId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) return;
+
+        const pct = data.total > 0 ? Math.round((data.current / data.total) * 100) : 0;
+
+        document.getElementById("progressBar").style.width   = pct + "%";
+        document.getElementById("progressCount").textContent = `${data.current} / ${data.total}`;
+        document.getElementById("statAnalyzed").textContent  = data.analyzed;
+        document.getElementById("statFailed").textContent    = data.failed;
+
+        if (data.company) {
+          document.getElementById("progressCompany").textContent = `Analyzing: ${data.company}`;
+        }
+
+        if (data.status === "done") {
+          clearInterval(pollInterval);
+          document.getElementById("progressBar").style.width      = "100%";
+          document.getElementById("progressCount").textContent    = `${data.total} / ${data.total}`;
+          document.getElementById("progressCompany").textContent  = "Done!";
+          document.getElementById("downloadBtn").style.display    = "block";
+          document.getElementById("runBtn").disabled              = false;
+          document.getElementById("runBtn").textContent           = "Analyze Websites";
+        } else if (data.status === "error") {
+          clearInterval(pollInterval);
+          showError("Job failed: " + (data.error || "Unknown error"));
+          document.getElementById("runBtn").disabled    = false;
+          document.getElementById("runBtn").textContent = "Analyze Websites";
+        }
+      })
+      .catch(() => { /* network hiccup — will retry on next tick */ });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Download
+  // ---------------------------------------------------------------------------
+  function downloadResults() {
+    if (currentJobId) {
+      window.location.href = `/download/${currentJobId}`;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Error helpers
+  // ---------------------------------------------------------------------------
+  function showError(msg) {
+    const el = document.getElementById("errorBanner");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+  function hideError() {
+    document.getElementById("errorBanner").style.display = "none";
+  }
+</script>
+</body>
+</html>
