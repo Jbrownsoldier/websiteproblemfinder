@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, render_template, request, send_file
 
 import config
-from main import OUTPUT_COLUMNS, run_pipeline
+from main import run_pipeline
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB upload limit
@@ -196,4 +196,4 @@ if __name__ == "__main__":
     print("  Website Problem Finder")
     print("  Open your browser at: http://localhost:5001")
     print("=" * 55)
-    app.run(debug=False, host="0.0.0.0", port=5001)
+    app.run(debug=False, host="0.0.0.0", port=5002)
