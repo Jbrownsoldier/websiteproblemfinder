@@ -219,6 +219,32 @@
     <div class="settings-box" style="margin-top: 20px;">
       <div class="section-title">Settings</div>
 
+      <!-- Row limit -->
+      <div class="api-key-row" style="margin-bottom: 16px;">
+        <label for="rowLimit">Rows to process</label>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <input
+            type="number"
+            id="rowLimit"
+            min="1"
+            max="10000"
+            value="100"
+            style="width:100px; padding:10px 12px; border:1px solid #d1d5db;
+                   border-radius:8px; font-size:14px; font-weight:600;
+                   outline:none; transition:border-color 0.2s;"
+            onfocus="this.style.borderColor='#4f46e5'"
+            onblur="this.style.borderColor='#d1d5db'"
+          />
+          <span id="rowLimitHint" style="font-size:12px; color:#6b7280; line-height:1.5;"></span>
+        </div>
+        <div class="api-key-hint" style="margin-top:5px;">
+          Processes the first N rows of your CSV. ~4–5 sec per row —
+          <strong>100 rows ≈ 7–8 min</strong>, 500 rows ≈ 35–40 min.
+        </div>
+      </div>
+
+      <div style="height:1px; background:#f0f0f0; margin-bottom:16px;"></div>
+
       <!-- API key -->
       <div class="api-key-row">
         <label for="apiKey">Anthropic API Key <span style="color:#9ca3af; font-weight:400">(optional)</span></label>
@@ -308,27 +334,46 @@
   });
 
   // ---------------------------------------------------------------------------
+  // Live time estimate next to row limit input
+  // ---------------------------------------------------------------------------
+  const rowLimitInput = document.getElementById("rowLimit");
+  const rowLimitHint  = document.getElementById("rowLimitHint");
+
+  function updateTimeEstimate() {
+    const n = parseInt(rowLimitInput.value) || 0;
+    if (n <= 0) { rowLimitHint.textContent = ""; return; }
+    const mins = Math.round(n * 4.5 / 60);
+    if (mins < 1) {
+      rowLimitHint.textContent = `≈ under 1 minute`;
+    } else if (mins === 1) {
+      rowLimitHint.textContent = `≈ 1 minute`;
+    } else {
+      rowLimitHint.textContent = `≈ ${mins} minutes`;
+    }
+  }
+  rowLimitInput.addEventListener("input", updateTimeEstimate);
+  updateTimeEstimate();
+
+  // ---------------------------------------------------------------------------
   // Start job
   // ---------------------------------------------------------------------------
   function startJob() {
-    const file   = csvFile.files[0];
-    const apiKey = document.getElementById("apiKey").value.trim();
+    const file     = csvFile.files[0];
+    const apiKey   = document.getElementById("apiKey").value.trim();
+    const rowLimit = parseInt(document.getElementById("rowLimit").value) || 100;
 
     // Validate
     if (!file) {
       showError("Please select a CSV file.");
       return;
     }
-    if (!apiKey) {
-      showError("Please enter your Anthropic API key.");
-      return;
-    }
 
     hideError();
 
     const formData = new FormData();
-    formData.append("csv_file", file);
-    formData.append("api_key",  apiKey);
+    formData.append("csv_file",  file);
+    formData.append("api_key",   apiKey);
+    formData.append("row_limit", rowLimit);
 
     document.getElementById("runBtn").disabled = true;
     document.getElementById("runBtn").textContent = "Starting...";

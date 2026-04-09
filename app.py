@@ -66,8 +66,12 @@ def run():
     if not f.filename or not f.filename.lower().endswith(".csv"):
         return jsonify({"error": "Please upload a .csv file"}), 400
 
-    # --- Read API key (optional — rule engine runs without it) ---
-    api_key = request.form.get("api_key", "").strip()
+    # --- Read settings ---
+    api_key   = request.form.get("api_key",   "").strip()
+    try:
+        row_limit = int(request.form.get("row_limit", 0))
+    except (ValueError, TypeError):
+        row_limit = 0
 
     # --- Parse CSV ---
     try:
@@ -79,6 +83,10 @@ def run():
 
     if not rows:
         return jsonify({"error": "The uploaded CSV is empty"}), 400
+
+    # Apply row limit (0 or missing = process all rows)
+    if row_limit and row_limit > 0:
+        rows = rows[:row_limit]
 
     sample_keys = set(rows[0].keys())
     if "company_name" not in sample_keys:
