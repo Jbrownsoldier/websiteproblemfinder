@@ -5,7 +5,7 @@ import csv
 import re
 import time
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Callable, Optional
 
 import config
 from scraper import scrape_website
@@ -136,7 +136,7 @@ def run_pipeline(
     rows: list,
     output_path: str,
     api_key: str,
-    progress_callback: Callable | None = None,
+    progress_callback: Optional[Callable] = None,
 ) -> None:
     """
     Iterate all rows, call process_row() on each, write output CSV progressively.
