@@ -1,5 +1,6 @@
 # main.py
 # Pipeline orchestrator: CSV row → scrape → analyze → output row with websiteproblem.
+# All original input columns are preserved in the output; new columns are appended.
 
 import csv
 import re
@@ -13,17 +14,10 @@ from analyzer import analyze_website
 
 
 # ---------------------------------------------------------------------------
-# Output columns
+# New columns appended to the right of every output row
 # ---------------------------------------------------------------------------
 
-OUTPUT_COLUMNS = [
-    "company_name",
-    "website",
-    "websiteproblem",
-    "website_status",
-    "notes",
-    "generated_at",
-]
+NEW_COLUMNS = ["websiteproblem", "website_status", "notes", "generated_at"]
 
 # Statuses that mean the site is unreachable — skip Claude, use fallback
 FATAL_STATUSES = {"connection_error", "timeout", "ssl_error", "blocked", "missing_url"}
@@ -42,19 +36,13 @@ def clean_website_url(raw: str) -> str:
         return ""
 
     url = raw.strip()
-
-    # Remove common non-URL junk
     url = re.sub(r"\s+", "", url)
 
-    # Add scheme if missing
     if not re.match(r"^https?://", url, re.IGNORECASE):
         url = "https://" + url
 
-    # Normalize scheme to lowercase
     url = re.sub(r"^HTTP://", "http://", url)
     url = re.sub(r"^HTTPS://", "https://", url)
-
-    # Strip trailing slash
     url = url.rstrip("/")
 
     return url
@@ -67,47 +55,41 @@ def clean_website_url(raw: str) -> str:
 def process_row(row: dict, api_key: str) -> dict:
     """
     Process one CSV row: scrape the website and identify its conversion problem.
-    Returns a dict with all OUTPUT_COLUMNS populated.
+    Returns the original row dict with new columns appended.
     """
+    # Start with all original columns preserved
+    output = dict(row)
+
     company_name = (row.get("company_name") or "").strip()
+    raw_website  = (row.get("website") or row.get("organizationWebsite") or row.get("domain") or "").strip()
+    website      = clean_website_url(raw_website)
 
-    # Resolve website URL: prefer "website" column, fall back to "domain"
-    raw_website = (row.get("website") or row.get("domain") or "").strip()
-    website = clean_website_url(raw_website)
-
-    output = {
-        "company_name": company_name,
-        "website":      website or raw_website,
-        "websiteproblem": "",
-        "website_status": "",
-        "notes":        "",
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }
+    output["websiteproblem"] = ""
+    output["website_status"] = ""
+    output["notes"]          = ""
+    output["generated_at"]   = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     if not website:
         output["websiteproblem"] = config.FALLBACK_PROBLEM_SITE_DOWN
         output["website_status"] = "missing_url"
-        output["notes"] = "No website or domain provided"
+        output["notes"]          = "No website or domain provided"
         return output
 
     # --- Scrape ---
     scrape_result = scrape_website(website)
 
     output["website_status"] = scrape_result.website_status
-    output["notes"] = scrape_result.notes
+    output["notes"]          = scrape_result.notes
 
-    # Fatal scrape failure → use fallback, skip Claude
     if scrape_result.website_status in FATAL_STATUSES:
         output["websiteproblem"] = config.FALLBACK_PROBLEM_SITE_DOWN
         return output
 
-    # No content returned (JS-only, empty pages) → use no-content fallback
     if not scrape_result.pages:
         output["websiteproblem"] = config.FALLBACK_PROBLEM_NO_CONTENT
         output["website_status"] = output["website_status"] or "no_content"
         return output
 
-    # All pages are js_rendered_likely and produced no real text
     all_sparse = all(
         not p.text or len(p.text) < config.JS_RENDER_TEXT_THRESHOLD
         for p in scrape_result.pages
@@ -116,14 +98,13 @@ def process_row(row: dict, api_key: str) -> dict:
         output["websiteproblem"] = config.FALLBACK_PROBLEM_NO_CONTENT
         return output
 
-    # --- Analyze with Claude ---
-    websiteproblem = analyze_website(
+    # --- Analyze ---
+    output["websiteproblem"] = analyze_website(
         company_name=company_name,
         website=website,
         scrape_result=scrape_result,
         api_key=api_key,
     )
-    output["websiteproblem"] = websiteproblem
 
     return output
 
@@ -140,14 +121,23 @@ def run_pipeline(
 ) -> None:
     """
     Iterate all rows, call process_row() on each, write output CSV progressively.
+    Preserves all original input columns and appends new columns on the right.
     Calls progress_callback(current, total, company_name, analyzed, failed) after each row.
     """
-    total = len(rows)
+    if not rows:
+        return
+
+    total    = len(rows)
     analyzed = 0
-    failed = 0
+    failed   = 0
+
+    # Build fieldnames: all original columns + new columns (no duplicates)
+    original_cols = list(rows[0].keys())
+    extra_cols    = [c for c in NEW_COLUMNS if c not in original_cols]
+    fieldnames    = original_cols + extra_cols
 
     with open(output_path, "w", newline="", encoding="utf-8") as fout:
-        writer = csv.DictWriter(fout, fieldnames=OUTPUT_COLUMNS, extrasaction="ignore")
+        writer = csv.DictWriter(fout, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
 
         for i, row in enumerate(rows, start=1):
@@ -156,7 +146,6 @@ def run_pipeline(
             try:
                 result = process_row(row, api_key)
 
-                # Track analyzed vs failed
                 if result["websiteproblem"] in (
                     config.FALLBACK_PROBLEM_SITE_DOWN,
                     config.FALLBACK_PROBLEM_NO_CONTENT,
@@ -170,22 +159,18 @@ def run_pipeline(
 
             except Exception as e:
                 failed += 1
-                writer.writerow({
-                    "company_name":   company_name,
-                    "website":        (row.get("website") or row.get("domain") or "").strip(),
-                    "websiteproblem": config.FALLBACK_PROBLEM_ANALYZE_ERROR,
-                    "website_status": "error",
-                    "notes":          str(e),
-                    "generated_at":   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                })
+                fallback = dict(row)
+                fallback["websiteproblem"] = config.FALLBACK_PROBLEM_ANALYZE_ERROR
+                fallback["website_status"] = "error"
+                fallback["notes"]          = str(e)
+                fallback["generated_at"]   = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                writer.writerow(fallback)
 
-            # Flush every PARTIAL_SAVE_EVERY rows for crash safety
             if i % config.PARTIAL_SAVE_EVERY == 0:
                 fout.flush()
 
             if progress_callback:
                 progress_callback(i, total, company_name, analyzed, failed)
 
-            # Polite delay between companies
             if i < total:
                 time.sleep(config.REQUEST_DELAY_SECONDS)
