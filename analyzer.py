@@ -3,6 +3,7 @@
 #   1. Extract structural conversion signals from scraped HTML (pure BeautifulSoup, no API)
 #   2. Call Claude to identify the single most important conversion problem
 
+import hashlib
 import re
 from dataclasses import dataclass, field
 
@@ -11,6 +12,73 @@ from bs4 import BeautifulSoup
 
 import config
 from scraper import ScrapeResult
+
+
+# ---------------------------------------------------------------------------
+# Phrase variation helper
+# ---------------------------------------------------------------------------
+
+def _pick(website: str, phrases: list) -> str:
+    """
+    Deterministically pick one phrase from a list using a hash of the website URL.
+    Same company always gets the same phrase — varied across different companies.
+    """
+    idx = int(hashlib.md5(website.encode()).hexdigest(), 16) % len(phrases)
+    return phrases[idx]
+
+
+# Phrase pools keyed by problem type — all fit "I noticed your website is [X]"
+_PHRASES = {
+    "no_contact_path": [
+        "missing any way for visitors to contact or reach out",
+        "not giving visitors a clear next step to get in touch",
+        "lacking any contact option for visitors who are ready to connect",
+        "missing a direct way for interested visitors to take action",
+        "not showing visitors how to reach out or get started",
+    ],
+    "no_phone_no_form_no_booking": [
+        "missing a phone number, contact form, or any way for visitors to reach out",
+        "giving visitors no clear path to call, book, or get in touch",
+        "not providing a phone number or any form for visitors to reach out",
+        "leaving visitors with no way to call, contact, or request anything",
+        "missing any phone number or contact form for ready-to-act visitors",
+    ],
+    "phone_buried_no_other": [
+        "hiding the phone number below the fold with no form or booking option",
+        "burying the only contact option — the phone number — below the fold",
+        "pushing the phone number out of sight with no form or booking alternative",
+        "hiding the phone number where visitors are unlikely to find it",
+        "keeping the phone number buried with no other way to reach out",
+    ],
+    "no_form_no_booking": [
+        "missing a contact form or online booking option",
+        "not offering a form or booking option for visitors ready to take action",
+        "giving visitors only a phone number with no form or booking path",
+        "lacking a contact form or any way for visitors to self-serve a next step",
+        "missing a quote form or booking option alongside the phone number",
+    ],
+    "form_buried_no_cta": [
+        "burying the contact form with no clear call to action directing visitors to it",
+        "hiding the contact form without a clear button or CTA pointing visitors to it",
+        "having a contact form but no strong call to action to guide visitors there",
+        "making the contact form hard to find with no visible CTA above the fold",
+        "burying the lead capture form without directing visitors to take action",
+    ],
+    "phone_buried_no_cta": [
+        "hiding the phone number below the fold and missing a clear call to action",
+        "burying the phone number with no call to action to guide visitors",
+        "keeping the phone number out of sight and offering no clear next step",
+        "hiding contact info below the fold with nothing guiding visitors to act",
+        "burying the phone number and leaving visitors without a clear path forward",
+    ],
+    "no_cta": [
+        "lacking any clear call to action for ready-to-buy visitors",
+        "not guiding visitors toward any next step once they land on the site",
+        "missing a strong call to action that moves visitors toward conversion",
+        "leaving visitors with no clear direction on what to do next",
+        "offering no call to action for visitors who are ready to take the next step",
+    ],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -335,11 +403,14 @@ Return only the websiteproblem value."""
 # Rule-based analysis (runs first — no API key required)
 # ---------------------------------------------------------------------------
 
-def rule_based_analysis(signals: ConversionSignals) -> "str | None":
+def rule_based_analysis(signals: ConversionSignals, website: str = "") -> "str | None":
     """
     Apply deterministic rules to identify obvious conversion gaps.
     Returns a websiteproblem string when the problem is clear-cut.
     Returns None when the situation is ambiguous — caller should invoke Claude.
+
+    Uses website URL to deterministically vary phrasing so the same problem
+    doesn't produce identical copy across every row in a CSV.
 
     Priority order mirrors the conversion hierarchy:
     book > quote > call > form > chat > email > CTA
@@ -353,36 +424,36 @@ def rule_based_analysis(signals: ConversionSignals) -> "str | None":
 
     # 1. Absolutely nothing — no way to contact or convert
     if not has_any_path and not signals.has_strong_cta:
-        return "missing any way for visitors to contact or reach out"
+        return _pick(website, _PHRASES["no_contact_path"])
 
     # 2. No phone, no booking widget, no contact form — only maybe a CTA link
     if not signals.has_phone_number and not signals.has_booking_widget and not signals.has_contact_form:
-        return "missing a phone number, contact form, or any way for visitors to reach out"
+        return _pick(website, _PHRASES["no_phone_no_form_no_booking"])
 
     # 3. No booking widget and no contact form (phone may exist but that's it)
     if not signals.has_booking_widget and not signals.has_contact_form:
         if signals.has_phone_number and not signals.phone_in_header:
-            return "hiding the phone number below the fold with no form or booking option"
+            return _pick(website, _PHRASES["phone_buried_no_other"])
         if signals.has_phone_number:
-            return "missing a contact form or online booking option"
+            return _pick(website, _PHRASES["no_form_no_booking"])
 
     # 4. Has contact form but no booking widget and phone is buried (or absent)
     if not signals.has_booking_widget:
         if not signals.has_phone_number:
             if signals.has_contact_form and not signals.has_strong_cta:
-                return "burying the contact form with no clear call to action directing visitors to it"
+                return _pick(website, _PHRASES["form_buried_no_cta"])
             if signals.has_contact_form:
                 # Form + CTAs exist, no phone, no booking — ambiguous enough for Claude
                 return None
         elif not signals.phone_in_header:
             if not signals.has_strong_cta:
-                return "hiding the phone number below the fold and missing a clear call to action"
+                return _pick(website, _PHRASES["phone_buried_no_cta"])
             # Phone buried but form + CTAs present — let Claude judge
             return None
 
     # 5. No CTAs anywhere and no booking widget
     if not signals.has_strong_cta and not signals.has_booking_widget:
-        return "lacking any clear call to action for ready-to-buy visitors"
+        return _pick(website, _PHRASES["no_cta"])
 
     # 6. All the obvious elements are present — problem is subtle
     #    Let Claude read the actual page content and judge
@@ -447,7 +518,7 @@ def analyze_website(
         signals = extract_signals(scrape_result)
 
         # --- Step 1: try rule engine first (free, instant) ---
-        rule_result = rule_based_analysis(signals)
+        rule_result = rule_based_analysis(signals, website=website)
         if rule_result is not None:
             return rule_result
 
