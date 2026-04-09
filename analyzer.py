@@ -18,6 +18,19 @@ from scraper import ScrapeResult
 # Phrase variation helper
 # ---------------------------------------------------------------------------
 
+_WEAK_CTA_PATTERNS = re.compile(
+    r"^(contact\s*us|get\s*in\s*touch|learn\s*more|read\s*more|find\s*out\s*more|"
+    r"click\s*here|submit|send|about\s*us|view\s*more|see\s*more|explore)$",
+    re.IGNORECASE,
+)
+
+def _only_weak_ctas(cta_texts: list) -> bool:
+    """Return True if every detected CTA is a generic nav link with no conversion intent."""
+    if not cta_texts:
+        return True
+    return all(_WEAK_CTA_PATTERNS.match(t.strip()) for t in cta_texts)
+
+
 def _pick(website: str, phrases: list) -> str:
     """
     Deterministically pick one phrase from a list using a hash of the website URL.
@@ -79,6 +92,13 @@ _PHRASES = {
         "missing a clear call to action button on the homepage — visitors who are ready to act have nowhere obvious to click",
         "displaying no call to action on the homepage, so visitors have to figure out on their own how to get in touch",
         "giving visitors landing on the homepage no button or prompt that guides them toward contacting or booking",
+    ],
+    "phone_buried_weak_cta": [
+        "showing the phone number only at the bottom of the homepage with no book, quote, or request button above the fold",
+        "burying the phone number below the fold on the homepage while the only contact option at the top is a generic Contact Us link",
+        "placing the phone number in the footer of the homepage with no button above it to book, quote, or get started",
+        "hiding the phone number at the bottom of the homepage — the only thing visitors see at the top is a generic Contact Us link",
+        "showing the phone number only below the fold with no quote, booking, or request button visible when visitors first land on the page",
     ],
 }
 
@@ -372,27 +392,33 @@ Decision rules:
 - If no strong money-adjacent action exists, identify the missing lead capture or weak CTA problem
 - Ignore all issues that are less important than the main conversion blocker
 
-Output format rules (strictly enforced):
-- Return ONLY the websiteproblem value — nothing else, no explanation
+STRICT OUTPUT FORMAT — every rule below is mandatory:
+- Return ONLY the websiteproblem value — no explanation, no preamble, nothing else
 - No quotation marks, no bullets, no period at the end
-- Must fit naturally in the sentence: "I noticed your website is [websiteproblem]"
-- Be concise, specific, and natural — as if spoken in a cold outreach message
-- Do NOT mention page speed, technical SEO, branding, colors, or design unless directly tied to conversion loss
+- Must fit naturally in: "I noticed your website is [websiteproblem]"
+- Do NOT mention page speed, SEO, branding, colors, or design
 
-Output requirements:
-- Mention the specific page (homepage, contact page, services page, etc.)
-- Mention where on the page (top, above the fold, bottom, footer, buried in a section)
-- Describe what a non-technical visitor would experience — plain English, no jargon
-- Must be specific enough that someone can open the site and find the problem in 10 seconds
-- Must sound like a real problem tied to friction where money could be made
+LOCATION RULES — non-negotiable:
+- You MUST name the specific page where the problem lives (homepage, contact page, services page, etc.)
+- You MUST describe where on that page (top of the page, above the fold, in the footer, buried below several sections, etc.)
+- You MUST describe what a non-technical visitor would actually experience when they hit this problem
+- The output must be specific enough that someone can open the site, look for 10 seconds, and confirm the problem is real
+- Never write something vague that could apply to any website
 
-Good output examples:
+BAD examples (too vague — never output these):
+  making it unclear how visitors should take the next step
+  lacking a clear call to action
+  not optimized for conversions
+  missing important conversion elements
+  not guiding visitors toward action
+
+GOOD examples (specific page + location + visitor experience):
   showing the phone number only in the footer of the homepage, where most visitors never scroll
-  showing no call to action button above the fold on the homepage — visitors have to scroll down to find anything to click
-  hiding the contact form at the bottom of the services page with no button at the top pointing visitors to it
-  showing a "Submit" button on the contact page instead of something clear like "Get My Free Quote"
-  missing a phone number or contact form on the contact page — just a map and an address
-  making visitors scroll through four sections of the homepage before seeing any way to get in touch"""
+  placing the only contact option — a phone number — at the very bottom of the homepage below four sections of content
+  showing no call to action button in the top half of the homepage — visitors have to scroll past the entire menu and hero image before seeing any way to get in touch
+  hiding the contact form at the bottom of the contact page with no button at the top pointing visitors to it
+  showing a generic Submit button on the contact page instead of something clear like Get My Free Quote
+  missing a phone number or contact form on the contact page — just a business address and a map"""
 
 USER_PROMPT_TEMPLATE = """WEBSITE: {website}
 COMPANY: {company_name}
@@ -403,7 +429,7 @@ COMPANY: {company_name}
 --- PAGE TEXT (trimmed, homepage + key subpage) ---
 {page_text}
 
-Return only the websiteproblem value."""
+Identify the single most important conversion problem. Name the specific page and location on that page. Return only the websiteproblem value."""
 
 
 # ---------------------------------------------------------------------------
@@ -453,13 +479,14 @@ def rule_based_analysis(signals: ConversionSignals, website: str = "") -> "str |
                 # Form + CTAs exist, no phone, no booking — ambiguous enough for Claude
                 return None
         elif not signals.phone_in_header:
-            if not signals.has_strong_cta:
-                return _pick(website, _PHRASES["phone_buried_no_cta"])
-            # Phone buried but form + CTAs present — let Claude judge
+            if not signals.has_strong_cta or _only_weak_ctas(signals.cta_texts):
+                # Phone buried, no real conversion CTA (only "Contact Us" etc.)
+                return _pick(website, _PHRASES["phone_buried_weak_cta"])
+            # Phone buried but has strong CTA + form — let Claude judge
             return None
 
-    # 5. No CTAs anywhere and no booking widget
-    if not signals.has_strong_cta and not signals.has_booking_widget:
+    # 5. No real conversion CTAs and no booking widget
+    if (_only_weak_ctas(signals.cta_texts)) and not signals.has_booking_widget:
         return _pick(website, _PHRASES["no_cta"])
 
     # 6. All the obvious elements are present — problem is subtle
